@@ -4,8 +4,8 @@
 const {response} = require('express');
 const express = require('express');
 const cors = require('cors');
+const axios = require('axios');
 require('dotenv').config();
-let data = require('./data/weather.json');
 const PORT = process.env.PORT || 3002;
 //Use
 const app = express();
@@ -17,14 +17,31 @@ app.get('/', (request, response) => {
   response.send('Hello, from our server');
 });
 
-app.get('/weather', (request, response, next) => {
+app.get('/weather', async (request, response, next) => {
   try {
-    // let searchQuery = request.query.name;
-    let latQuarry = Math.floor(request.query.lat);
-    let lonQuarry = Math.floor(request.query.lon);
-    let selectedCity = data.find(weather => Math.floor(weather.lat) === latQuarry && Math.floor(weather.lon) === lonQuarry);
-    let cityCleanedUp = selectedCity.data.map((elem, idx) => {return (new Forecast(selectedCity, idx));});
-    response.send(cityCleanedUp);
+    //Stores the requests from api call into a var /weather?request=""&request=""
+    let latQuarry = request.query.lat;
+    let lonQuarry = request.query.lon;
+    //makes a var that stores urls for api calls.
+    let url = `http://api.weatherbit.io/v2.0/forecast/daily?key=${process.env.WEATHER_API_KEY}&lat=${latQuarry}&lon=${lonQuarry}&lang=en&units=I&days=12`;
+    //api calls
+    let selectedCity = await axios.get(url);
+    //makes new constructor to format info as needed.
+    let cityCleanedUp = selectedCity.data.data.map((elem, idx) => {return (new Forecast(elem, idx));});
+    //sends new data to the caller.
+    response.send({cityCleanedUp});
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.get('/movie', async (request, response, next) => {
+  try {
+    let nameQuarry = request.query.name;
+    let movieUrl = `https://api.themoviedb.org/3/search/movie?api_key=${process.env.MOVIE_API_KEY}&query=${nameQuarry}`;
+    let selectedMovie = await axios.get(movieUrl);
+    let movieCleanedUp = selectedMovie.data.results.map((elem, idx) => {return (new Movies(elem, idx));});
+    response.send({movieCleanedUp});
   } catch (error) {
     next(error);
   }
@@ -45,8 +62,22 @@ app.use((error, request, response, next) => {
 // CLASSES
 class Forecast {
   constructor(cityObject, idx) {
-    this.description = `Low of ${cityObject.data[idx].low_temp} High of ${cityObject.data[idx].high_temp} and ${cityObject.data[idx].weather.description}.`;
-    this.date = cityObject.data[idx].datetime;
+    this.description = `Low of ${cityObject.low_temp} High of ${cityObject.high_temp} and ${cityObject.weather.description}.`;
+    this.date = cityObject.valid_date;
+    this.key = idx;
+  }
+}
+
+class Movies {
+  constructor(movieObj, idx) {
+    this.title = movieObj.title;
+    this.overview = movieObj.overview;
+    this.average_votes = movieObj.vote_average;
+    this.total_votes = movieObj.vote_count;
+    this.image_url = `https://image.tmdb.org/t/p/w500${movieObj.poster_path}`;
+    this.popularity = movieObj.popularity;
+    this.released_on = movieObj.release_date;
+    this.key = idx;
   }
 }
 
